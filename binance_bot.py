@@ -6,6 +6,7 @@ import time
 import json
 import logging
 import requests
+import re  # 添加正则模块用于转义
 from datetime import datetime, timedelta
 from config import Config
 
@@ -174,10 +175,11 @@ class NotificationManager:
         escaped_current = escape_markdown(f"{change_data['current_price']:,.2f}")
         escaped_time = escape_markdown(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'))
         
+        # 修复：转义消息模板中的括号
         return (
             f"🚨 *币安价格波动警报* \\({escape_markdown(market_type)}\\)\n"
             f"• 交易对: `{escaped_symbol}`\n"
-            f"• 时间窗口: `{escaped_window}分钟` (阈值: `{escaped_threshold}`)\n"
+            f"• 时间窗口: `{escaped_window}分钟` \\(阈值: `{escaped_threshold}`\\)\n"  # 修复括号转义
             f"• 价格变化: {direction} `{escaped_change}`\n"
             f"• 起始价格: `${escaped_start}`\n"
             f"• 当前价格: `${escaped_current}`\n"
@@ -237,7 +239,11 @@ class NotificationManager:
                 "text": message,
                 "parse_mode": "MarkdownV2"
             }
-            response = requests.post(url, json=payload, timeout=10)
+            
+            # 添加代理支持
+            proxies = {'https': Config.PROXY_URL} if Config.USE_PROXY and Config.PROXY_URL else None
+            
+            response = requests.post(url, json=payload, proxies=proxies, timeout=10)
             if response.status_code != 200:
                 logger.error(f"Telegram发送失败: {response.text}")
                 return False
