@@ -6,16 +6,17 @@ class Config:
     
     # 监控配置
     SYMBOLS = [
-        "BTCUSDT",
-        "ETHUSDT",
-        "BNBUSDT",
-        "SOLUSDT_PERP",  # 永续合约
-        "XRPUSDT_PERP"   # 永续合约
+        "BTCUSDT",       # BTC现货
+        "ETHUSDT",       # ETH现货
+        "BNBUSDT",       # BNB现货
+        "BTCUSDT_PERP",  # BTC永续合约
+        "ETHUSDT_PERP",  # ETH永续合约
+        "BNBUSDT_PERP"   # BNB永续合约
     ]
     
     # 时间窗口及对应的波动阈值 (分钟为单位)
     TIME_WINDOWS = {
-        5: 1.0    # 5分钟窗口阈值 1.0%
+        5: 1.0,    # 5分钟窗口阈值 1.0%
         15: 2.0,   # 15分钟窗口阈值 2.0%
         60: 3.5    # 60分钟窗口阈值 3.5%
     }
