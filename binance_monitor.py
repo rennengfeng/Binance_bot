@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-币安价格监控机器人 - 带初始价格显示
-功能：
-1. 监控指定交易对的价格波动
-2. 超过阈值时发送Telegram警报
-3. 启动时发送监控币种列表及初始价格
-"""
-
 import os
 import sys
 import time
