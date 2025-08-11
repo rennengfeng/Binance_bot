@@ -2,10 +2,12 @@
 监控币安合约对，超过价格波动直接向TG_Bot发送推送消息
 ## 使用方法
 1.** 克隆仓库： **
+
    ```bash
    git clone https://github.com/rennengfeng/binance_bot.git
    
-2.** 安装依赖 ** 
+2.** 安装依赖 **
+
    ```bash
    pip install -r requirements.txt
    
@@ -19,6 +21,7 @@
 如果服务器需要代理访问币安，配置代理 (USE_PROXY 和 PROXY_URL)
 
 4. 运行监控机器人
+
    ```bash
    python3 binance_monitor.py #或者 python binance_monitor.py
 
@@ -38,8 +41,10 @@
 ** 点击 "Start" 或发送 /start 消息 **
 ** 输入名称，创建，获取Token **
 ## 获取ID
+
    ```bash
    https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+
    替换 <YOUR_BOT_TOKEN> 为您的实际 Bot Token
    先给 Bot 发送一条消息
    刷新浏览器页面
