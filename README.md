@@ -38,7 +38,7 @@
    python3 binance_monitor.py #或者 python binance_monitor.py
    ```
 
-# 功能特点
+## 功能特点
 多交易对监控：同时监控多个加密货币交易对
 
 灵活的时间窗口：支持自定义多个时间窗口（如5分钟、15分钟、1小时）
