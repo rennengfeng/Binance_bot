@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-币安价格监控机器人 - 最终优化版
+币安价格监控机器人 - 带初始价格显示
 功能：
-1. 监控指定交易对的价格
-2. 检测指定时间窗口内的价格涨跌幅
-3. 当涨跌幅超过阈值时发送Telegram通知
-4. 记录价格历史数据
+1. 监控指定交易对的价格波动
+2. 超过阈值时发送Telegram警报
+3. 启动时发送监控币种列表及初始价格
 """
 
 import os
@@ -57,6 +56,11 @@ class PriceHistory:
     
     def add_price(self, symbol, price):
         """添加新的价格记录"""
+        # 忽略无效价格
+        if price is None or price <= 0:
+            logger.warning(f"忽略无效价格: {symbol} {price}")
+            return
+            
         now = datetime.utcnow()
         timestamp = now.isoformat()
         
@@ -89,7 +93,7 @@ class PriceHistory:
             if datetime.fromisoformat(entry["timestamp"]) > cutoff_time
         ]
     
-    def get_price_changes(self, symbol, time_windows):
+    def get_price_changes(self, symbol, time_windows_dict):
         """计算指定时间窗口内的价格变化"""
         if symbol not in self.history or not self.history[symbol]:
             return {}
@@ -99,7 +103,8 @@ class PriceHistory:
         
         changes = {}
         
-        for window in time_windows:
+        # 遍历所有时间窗口
+        for window, _ in time_windows_dict.items():
             # 计算窗口开始时间
             window_start = current_time - timedelta(minutes=window)
             
@@ -108,21 +113,24 @@ class PriceHistory:
                 entry_time = datetime.fromisoformat(entry["timestamp"])
                 if entry_time >= window_start:
                     start_price = entry["price"]
+                    
+                    # 检查价格有效性
+                    if start_price <= 0:
+                        continue
+                        
                     price_change = ((current_price - start_price) / start_price) * 100
-                    changes[f"{window}m"] = {
+                    changes[window] = {
                         "start_price": start_price,
                         "current_price": current_price,
-                        "change_percent": round(price_change, 2),
-                        "time_window": window
+                        "change_percent": round(price_change, 2)
                     }
                     break
             else:
                 # 如果没有找到足够的历史数据
-                changes[f"{window}m"] = {
+                changes[window] = {
                     "start_price": None,
                     "current_price": current_price,
-                    "change_percent": 0.0,
-                    "time_window": window
+                    "change_percent": 0.0
                 }
         
         return changes
@@ -132,17 +140,31 @@ class NotificationManager:
     def __init__(self, config):
         self.config = config
     
-    def send_alert(self, symbol, time_window, change_data):
+    def send_alert(self, symbol, time_window, change_data, threshold):
         """发送价格警报"""
         if not self.config.TELEGRAM_ENABLED:
             return
             
-        message = self.create_alert_message(symbol, time_window, change_data)
+        message = self.create_alert_message(symbol, time_window, change_data, threshold)
         logger.info(f"ALERT: {message}")
         self.send_telegram(message)
     
-    def create_alert_message(self, symbol, time_window, change_data):
+    def send_startup_message(self, symbols, initial_prices):
+        """发送启动通知"""
+        if not self.config.TELEGRAM_ENABLED or not self.config.STARTUP_NOTIFICATION:
+            return
+            
+        message = self.create_startup_message(symbols, initial_prices)
+        logger.info(f"STARTUP: {message}")
+        self.send_telegram(message)
+    
+    def create_alert_message(self, symbol, time_window, change_data, threshold):
         """创建警报消息"""
+        # 转义Telegram MarkdownV2特殊字符
+        def escape_markdown(text):
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            return ''.join(f'\\{char}' if char in escape_chars else char for char in str(text))
+        
         change_percent = change_data["change_percent"]
         direction = "📈 上涨" if change_percent > 0 else "📉 下跌"
         abs_change = abs(change_percent)
@@ -151,14 +173,67 @@ class NotificationManager:
         market_type = "现货" if "_PERP" not in symbol else "永续合约"
         clean_symbol = symbol.replace("_PERP", "")
         
+        # 转义所有动态内容
+        escaped_symbol = escape_markdown(clean_symbol)
+        escaped_window = escape_markdown(str(time_window))
+        escaped_change = escape_markdown(f"{abs_change:.2f}%")
+        escaped_threshold = escape_markdown(f"{threshold}%")
+        escaped_start = escape_markdown(f"{change_data['start_price']:,.2f}")
+        escaped_current = escape_markdown(f"{change_data['current_price']:,.2f}")
+        escaped_time = escape_markdown(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'))
+        
         return (
-            f"🚨 *币安价格波动警报* ({market_type})\n"
-            f"• 交易对: `{clean_symbol}`\n"
-            f"• 时间窗口: `{time_window}分钟`\n"
-            f"• 价格变化: {direction} `{abs_change:.2f}%`\n"
-            f"• 起始价格: `${change_data['start_price']:,.2f}`\n"
-            f"• 当前价格: `${change_data['current_price']:,.2f}`\n"
-            f"• 时间: `{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+            f"🚨 *币安价格波动警报* \\({escape_markdown(market_type)}\\)\n"
+            f"• 交易对: `{escaped_symbol}`\n"
+            f"• 时间窗口: `{escaped_window}分钟` (阈值: `{escaped_threshold}`)\n"
+            f"• 价格变化: {direction} `{escaped_change}`\n"
+            f"• 起始价格: `${escaped_start}`\n"
+            f"• 当前价格: `${escaped_current}`\n"
+            f"• 时间: `{escaped_time}`"
+        )
+    
+    def create_startup_message(self, symbols, initial_prices):
+        """创建启动消息 - 包含初始价格"""
+        # 转义Telegram MarkdownV2特殊字符
+        def escape_markdown(text):
+            escape_chars = r'_*[]()~`>#+-=|{}.!'
+            return ''.join(f'\\{char}' if char in escape_chars else char for char in str(text))
+        
+        # 格式化币种列表
+        symbol_list = []
+        for symbol in symbols:
+            market_type = "现货" if "_PERP" not in symbol else "永续合约"
+            clean_symbol = escape_markdown(symbol.replace("_PERP", ""))
+            
+            # 获取初始价格
+            price = initial_prices.get(symbol)
+            price_str = f"{price:,.4f}" if price is not None else "获取失败"
+            
+            # 转义括号
+            symbol_list.append(f"• `{clean_symbol}` \\({escape_markdown(market_type)}\\): `{escape_markdown(price_str)}`")
+        
+        symbol_list_str = "\n".join(symbol_list)
+        escaped_time = escape_markdown(datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'))
+        
+        # 格式化阈值配置
+        threshold_config = []
+        for window, threshold in self.config.TIME_WINDOWS.items():
+            # 双重转义确保安全
+            escaped_window = escape_markdown(str(window))
+            escaped_threshold = escape_markdown(str(threshold))
+            threshold_config.append(f"• `{escaped_window}分钟`: `{escaped_threshold}%`")
+        threshold_config_str = "\n".join(threshold_config)
+        
+        # 确保启动消息包含所有必要信息
+        return (
+            f"🚀 *币安价格监控已启动* \n"
+            f"• 监控开始时间: `{escaped_time}`\n"
+            f"• 监控币种 \\({len(symbols)}个\\):\n"  # 转义括号
+            f"{symbol_list_str}\n\n"
+            f"*监控配置*:\n"
+            f"• 检查间隔: `{escape_markdown(str(self.config.CHECK_INTERVAL))}秒`\n"
+            f"• 波动阈值:\n"
+            f"{threshold_config_str}"
         )
     
     def send_telegram(self, message):
@@ -173,8 +248,11 @@ class NotificationManager:
             response = requests.post(url, json=payload, timeout=10)
             if response.status_code != 200:
                 logger.error(f"Telegram发送失败: {response.text}")
+                return False
+            return True
         except Exception as e:
             logger.error(f"Telegram通知错误: {e}")
+            return False
 
 class BinanceMonitor:
     """币安价格监控器"""
@@ -199,6 +277,9 @@ class BinanceMonitor:
         # 警报冷却时间 (避免重复通知)
         self.last_alert_time = {}
         self.alert_cooldown = 5 * 60  # 5分钟
+        
+        # 启动通知标志
+        self.startup_notification_sent = False
     
     def get_price(self, symbol, futures=False):
         """获取指定交易对的价格"""
@@ -211,7 +292,14 @@ class BinanceMonitor:
             response.raise_for_status()
             
             data = response.json()
-            return float(data['price'])
+            price = float(data['price'])
+            
+            # 检查价格有效性
+            if price <= 0:
+                logger.error(f"获取到无效价格: {symbol} {price}")
+                return None
+                
+            return price
         except Exception as e:
             logger.error(f"获取 {symbol} 价格失败: {e}")
             return None
@@ -221,11 +309,33 @@ class BinanceMonitor:
         logger.info("=== 币安价格监控机器人启动 ===")
         logger.info(f"监控交易对: {', '.join(self.config.SYMBOLS)}")
         logger.info(f"监控间隔: {self.config.CHECK_INTERVAL}秒")
-        logger.info(f"波动阈值: {self.config.PRICE_CHANGE_THRESHOLD}%")
-        logger.info(f"时间窗口: {', '.join(map(str, self.config.TIME_WINDOWS))}分钟")
+        
+        # 记录阈值配置
+        for window, threshold in self.config.TIME_WINDOWS.items():
+            logger.info(f"{window}分钟窗口阈值: {threshold}%")
+        
+        # 获取初始价格用于启动通知
+        initial_prices = {}
+        for symbol in self.config.SYMBOLS:
+            is_futures = '_PERP' in symbol
+            clean_symbol = symbol.replace('_PERP', '')
+            price = self.get_price(clean_symbol, is_futures)
+            initial_prices[symbol] = price
+            if price is None:
+                logger.warning(f"获取初始价格失败: {symbol}")
+            else:
+                logger.info(f"{symbol} 初始价格: {price}")
         
         if self.config.TELEGRAM_ENABLED:
             logger.info("Telegram通知已启用")
+            # 发送启动通知
+            if not self.startup_notification_sent and self.config.STARTUP_NOTIFICATION:
+                logger.info("尝试发送启动通知...")
+                if self.notifier.send_startup_message(self.config.SYMBOLS, initial_prices):
+                    self.startup_notification_sent = True
+                    logger.info("已发送启动通知")
+                else:
+                    logger.warning("启动通知发送失败")
         else:
             logger.info("Telegram通知未启用")
         
@@ -267,20 +377,37 @@ class BinanceMonitor:
     
     def check_for_alerts(self, symbol, price_changes):
         """检查价格变化是否超过阈值"""
-        for time_key, change_data in price_changes.items():
-            if change_data["start_price"] is None:
-                continue  # 没有足够历史数据
-            
+        for window, change_data in price_changes.items():
+            # 获取该时间窗口的阈值
+            threshold = self.config.TIME_WINDOWS.get(window)
+            if threshold is None:
+                continue
+                
+            # 检查数据有效性
+            if (
+                change_data["start_price"] is None or 
+                change_data["start_price"] <= 0 or
+                change_data["current_price"] <= 0
+            ):
+                logger.debug(f"跳过无效数据: {symbol} {window}分钟 - 起始价: {change_data['start_price']}, 当前价: {change_data['current_price']}")
+                continue
+                
             abs_change = abs(change_data["change_percent"])
-            if abs_change >= self.config.PRICE_CHANGE_THRESHOLD:
+            
+            # 检查价格变化是否合理
+            if abs_change > 1000:  # 超过1000%的变化通常不合理
+                logger.warning(f"检测到异常价格波动: {symbol} {window}分钟 {abs_change}%")
+                continue
+                
+            if abs_change >= threshold:
                 # 检查冷却时间
-                alert_key = f"{symbol}_{time_key}"
+                alert_key = f"{symbol}_{window}"
                 current_time = time.time()
                 last_alert = self.last_alert_time.get(alert_key, 0)
                 
                 if current_time - last_alert > self.alert_cooldown:
                     # 发送警报
-                    self.notifier.send_alert(symbol, change_data["time_window"], change_data)
+                    self.notifier.send_alert(symbol, window, change_data, threshold)
                     self.last_alert_time[alert_key] = current_time
 
 def main():
