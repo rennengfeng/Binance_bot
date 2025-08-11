@@ -17,6 +17,7 @@
    ```
 
 3.**设置：**
+
 编辑 config.py 文件：
 设置要监控的交易对 (SYMBOLS)
 调整监控间隔 (CHECK_INTERVAL)，单位秒
@@ -43,9 +44,13 @@
 
 # TG机器人设置
 ## 创建机器人 
-** 在 Telegram 中搜索 @userinfobot **
-** 点击 "Start" 或发送 /start 消息 **
-** 输入名称，创建，获取Token **
+
+**在 Telegram 中搜索 @userinfobot**
+
+**点击 "Start" 或发送 /start 消息**
+
+**输入名称，创建，获取Token**
+
 ## 获取ID
 
    ```bash
