@@ -1,43 +1,42 @@
-# -*- coding: utf-8 -*-
-# 币安价格监控机器人配置
-
+# config.py
 class Config:
-    # ====== 基础配置 ======
-    DEBUG = True  # 调试模式开关，生产环境设为 False
+    # 币安API设置
+    SPOT_API_URL = "https://api.binance.com"
+    FUTURES_API_URL = "https://fapi.binance.com"
     
-    # ====== API配置 ======
-    SPOT_API_URL = "https://api.binance.com"          # 现货API地址
-    FUTURES_API_URL = "https://fapi.binance.com"      # 合约API地址
-    
-    # ====== 监控配置 ======
-    # 要监控的交易对 (支持现货和合约)
+    # 监控配置
     SYMBOLS = [
-        "BTCUSDT",      # 比特币现货
-        "ETHUSDT",      # 以太坊现货
-        "BNBUSDT",      # BNB现货
-        "SOLUSDT",      # Solana现货
-        "BTCUSDT_PERP", # 比特币永续合约
-        "ETHUSDT_PERP", # 以太坊永续合约
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT",
+        "SOLUSDT_PERP",  # 永续合约
+        "XRPUSDT_PERP"   # 永续合约
     ]
     
-    # 监控时间间隔 (秒)
-    CHECK_INTERVAL = 30
+    # 时间窗口及对应的波动阈值 (分钟为单位)
+    TIME_WINDOWS = {
+        5： 1.0    # 5分钟窗口阈值 1.0%
+        15: 2.0,   # 15分钟窗口阈值 2.0%
+        60: 3.5    # 60分钟窗口阈值 3.5%
+    }
     
-    # 价格波动阈值 (百分比)
-    PRICE_CHANGE_THRESHOLD = 2.0
+    CHECK_INTERVAL = 60  # 检查间隔(秒)
     
-    # 时间窗口设置 (分钟)
-    TIME_WINDOWS = [5, 15, 60]  # 监控5分钟/15分钟/1小时涨跌幅
+    # 历史数据设置
+    MAX_HISTORY_HOURS = 24  # 保留历史数据的小时数
+    DATA_FILE = "price_history.json"  # 历史数据存储文件
     
-    # ====== Telegram通知配置 ======
-    TELEGRAM_ENABLED = True  # 是否启用Telegram通知
-    TELEGRAM_BOT_TOKEN = "YOUR_BOT_TOKEN"  # 替换为您的Bot Token
-    TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"      # 替换为您的Chat ID
+    # Telegram通知设置
+    TELEGRAM_ENABLED = True                         # True 为开启通知，False 为不开启
+    TELEGRAM_BOT_TOKEN = "your_telegram_bot_token"  # 替换你的TG机器人token
+    TELEGRAM_CHAT_ID = "your_telegram_chat_id"      # 替换你的chat_id
     
-    # ====== 代理配置 (如果需要) ======
-    USE_PROXY = False  # 是否使用代理
-    PROXY_URL = "http://proxy-ip:port"  # 代理地址
+    # 启动通知
+    STARTUP_NOTIFICATION = True  # 是否发送启动通知
     
-    # ====== 数据存储 ======
-    DATA_FILE = "price_history.json"  # 价格历史存储文件
-    MAX_HISTORY_HOURS = 24  # 存储24小时历史数据
+    # 代理设置 (如果需要)
+    USE_PROXY = False
+    PROXY_URL = "http://user:pass@host:port"  # 代理地址
+    
+    # 调试模式
+    DEBUG = True
