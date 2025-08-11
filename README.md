@@ -4,7 +4,7 @@
 1.**克隆仓库：**
 
    ```bash
-   git clone https://github.com/rennengfeng/binance_bot.git
+   git clone https://github.com/rennengfeng/Binance_bot.git
    ```
    ```bash
    cd binance_bot
