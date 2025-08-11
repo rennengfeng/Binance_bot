@@ -5,13 +5,18 @@
 
    ```bash
    git clone https://github.com/rennengfeng/binance_bot.git
-   
-2.** 安装依赖 **
+   ```
+   ```bash
+   cd binance_bot
+   ```
+
+2.** 安装依赖： **
 
    ```bash
    pip install -r requirements.txt
-   
-3. ** 设置 **
+   ```
+
+3.** 设置： **
 编辑 config.py 文件：
 设置要监控的交易对 (SYMBOLS)
 调整监控间隔 (CHECK_INTERVAL)，单位秒
@@ -20,10 +25,11 @@
 如果需要通知，配置 Telegram（token id） 设置
 如果服务器需要代理访问币安，配置代理 (USE_PROXY 和 PROXY_URL)
 
-4. 运行监控机器人
+4.** 运行机器人： **
 
    ```bash
    python3 binance_monitor.py #或者 python binance_monitor.py
+   ```
 
 ## 功能特点
 多交易对监控：同时监控多个加密货币交易对
@@ -44,7 +50,7 @@
 
    ```bash
    https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
-
+   ```
    替换 <YOUR_BOT_TOKEN> 为您的实际 Bot Token
    先给 Bot 发送一条消息
    刷新浏览器页面
