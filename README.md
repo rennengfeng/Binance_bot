@@ -20,6 +20,10 @@
 
 编辑 config.py 文件：
 
+ ```bash
+   nano config.py
+   ```
+
 设置要监控的交易对 (SYMBOLS)
 
 调整监控间隔 (CHECK_INTERVAL)，单位秒
