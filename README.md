@@ -57,11 +57,11 @@
 
 ## 创建机器人 
 
-**在 Telegram 中搜索 @userinfobot**
+在 Telegram 中搜索 @userinfobot
 
-**点击 "Start" 或发送 /start 消息**
+点击 "Start" 或发送 /start 消息
 
-**输入名称，创建，获取Token**
+输入名称，创建，获取Token
 
 ## 获取ID
 
