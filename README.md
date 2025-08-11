@@ -7,7 +7,7 @@
    git clone https://github.com/rennengfeng/Binance_bot.git
    ```
    ```bash
-   cd binance_bot
+   cd Binance_bot
    ```
 
 2.**安装依赖：**
