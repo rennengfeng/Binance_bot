@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-币安价格监控机器人
+币安价格监控机器人 - 最终优化版
 功能：
 1. 监控指定交易对的价格
 2. 检测指定时间窗口内的价格涨跌幅
-3. 当涨跌幅超过阈值时发送通知
+3. 当涨跌幅超过阈值时发送Telegram通知
 4. 记录价格历史数据
 """
 
@@ -17,7 +17,6 @@ import logging
 import requests
 from datetime import datetime, timedelta
 from config import Config
-from contract_addresses import CONTRACT_ADDRESSES, TOKEN_NAMES
 
 # 设置日志
 logging.basicConfig(
@@ -32,9 +31,9 @@ logger = logging.getLogger('BinanceMonitor')
 
 class PriceHistory:
     """价格历史数据管理"""
-    def __init__(self, data_file=Config.DATA_FILE, max_history_hours=Config.MAX_HISTORY_HOURS):
+    def __init__(self, data_file=Config.DATA_FILE, max_hours=Config.MAX_HISTORY_HOURS):
         self.data_file = data_file
-        self.max_history_hours = max_history_hours
+        self.max_hours = max_hours
         self.history = self.load_history()
     
     def load_history(self):
@@ -53,7 +52,6 @@ class PriceHistory:
         try:
             with open(self.data_file, 'w') as f:
                 json.dump(self.history, f, indent=2)
-            logger.debug("历史数据已保存")
         except Exception as e:
             logger.error(f"保存历史数据失败: {e}")
     
@@ -83,7 +81,7 @@ class PriceHistory:
             return
         
         # 计算最早保留的时间点
-        cutoff_time = current_time - timedelta(hours=self.max_history_hours)
+        cutoff_time = current_time - timedelta(hours=self.max_hours)
         
         # 过滤掉旧数据
         self.history[symbol] = [
@@ -106,9 +104,9 @@ class PriceHistory:
             window_start = current_time - timedelta(minutes=window)
             
             # 找到窗口开始时间之后的最早价格
-            for entry in reversed(self.history[symbol]):
+            for entry in self.history[symbol]:
                 entry_time = datetime.fromisoformat(entry["timestamp"])
-                if entry_time <= window_start:
+                if entry_time >= window_start:
                     start_price = entry["price"]
                     price_change = ((current_price - start_price) / start_price) * 100
                     changes[f"{window}m"] = {
@@ -136,34 +134,31 @@ class NotificationManager:
     
     def send_alert(self, symbol, time_window, change_data):
         """发送价格警报"""
+        if not self.config.TELEGRAM_ENABLED:
+            return
+            
         message = self.create_alert_message(symbol, time_window, change_data)
         logger.info(f"ALERT: {message}")
-        
-        # 发送Telegram通知
-        if self.config.TELEGRAM_ENABLED:
-            self.send_telegram(message)
-        
-        # 发送邮件通知
-        if self.config.EMAIL_ENABLED:
-            self.send_email(f"币安价格警报 - {symbol}", message)
+        self.send_telegram(message)
     
     def create_alert_message(self, symbol, time_window, change_data):
         """创建警报消息"""
         change_percent = change_data["change_percent"]
-        direction = "上涨" if change_percent > 0 else "下跌"
+        direction = "📈 上涨" if change_percent > 0 else "📉 下跌"
         abs_change = abs(change_percent)
         
-        # 获取代币名称
-        base_currency = symbol.replace("USDT", "")
-        token_name = TOKEN_NAMES.get(base_currency, base_currency)
+        # 判断是现货还是合约
+        market_type = "现货" if "_PERP" not in symbol else "永续合约"
+        clean_symbol = symbol.replace("_PERP", "")
         
         return (
-            f"🚨 价格波动警报: {token_name} ({symbol})\n"
-            f"⏱️ 时间窗口: {time_window}分钟\n"
-            f"📈 价格变化: {direction} {abs_change:.2f}%\n"
-            f"💰 起始价格: ${change_data['start_price']:,.2f}\n"
-            f"💰 当前价格: ${change_data['current_price']:,.2f}\n"
-            f"🕒 时间: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            f"🚨 *币安价格波动警报* ({market_type})\n"
+            f"• 交易对: `{clean_symbol}`\n"
+            f"• 时间窗口: `{time_window}分钟`\n"
+            f"• 价格变化: {direction} `{abs_change:.2f}%`\n"
+            f"• 起始价格: `${change_data['start_price']:,.2f}`\n"
+            f"• 当前价格: `${change_data['current_price']:,.2f}`\n"
+            f"• 时间: `{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}`"
         )
     
     def send_telegram(self, message):
@@ -173,33 +168,13 @@ class NotificationManager:
             payload = {
                 "chat_id": self.config.TELEGRAM_CHAT_ID,
                 "text": message,
-                "parse_mode": "HTML"
+                "parse_mode": "MarkdownV2"
             }
             response = requests.post(url, json=payload, timeout=10)
             if response.status_code != 200:
                 logger.error(f"Telegram发送失败: {response.text}")
         except Exception as e:
             logger.error(f"Telegram通知错误: {e}")
-    
-    def send_email(self, subject, body):
-        """发送邮件通知"""
-        try:
-            import smtplib
-            from email.mime.text import MIMEText
-            from email.header import Header
-            
-            msg = MIMEText(body, 'plain', 'utf-8')
-            msg['Subject'] = Header(subject, 'utf-8')
-            msg['From'] = self.config.EMAIL_USER
-            
-            with smtplib.SMTP(self.config.EMAIL_SMTP_SERVER, self.config.EMAIL_SMTP_PORT) as server:
-                server.starttls()
-                server.login(self.config.EMAIL_USER, self.config.EMAIL_PASSWORD)
-                for receiver in self.config.EMAIL_RECEIVERS:
-                    msg['To'] = receiver
-                    server.sendmail(self.config.EMAIL_USER, receiver, msg.as_string())
-        except Exception as e:
-            logger.error(f"邮件发送失败: {e}")
 
 class BinanceMonitor:
     """币安价格监控器"""
@@ -207,25 +182,23 @@ class BinanceMonitor:
         self.config = config
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "BinanceMonitor/1.0",
+            "Accept": "application/json"
         })
         
         # 设置代理
         self.proxies = None
         if self.config.USE_PROXY and self.config.PROXY_URL:
-            self.proxies = {
-                'http': self.config.PROXY_URL,
-                'https': self.config.PROXY_URL
-            }
+            self.proxies = {'https': self.config.PROXY_URL}
             logger.info(f"使用代理: {self.config.PROXY_URL}")
         
         # 初始化组件
         self.price_history = PriceHistory()
         self.notifier = NotificationManager(config)
         
-        # 状态跟踪
+        # 警报冷却时间 (避免重复通知)
         self.last_alert_time = {}
-        self.alert_cooldown = 5 * 60  # 5分钟冷却时间(秒)
+        self.alert_cooldown = 5 * 60  # 5分钟
     
     def get_price(self, symbol, futures=False):
         """获取指定交易对的价格"""
@@ -234,7 +207,7 @@ class BinanceMonitor:
             endpoint = "/fapi/v1/ticker/price" if futures else "/api/v3/ticker/price"
             url = f"{base_url}{endpoint}?symbol={symbol}"
             
-            response = self.session.get(url, proxies=self.proxies, timeout=15)
+            response = self.session.get(url, proxies=self.proxies, timeout=10)
             response.raise_for_status()
             
             data = response.json()
@@ -251,17 +224,24 @@ class BinanceMonitor:
         logger.info(f"波动阈值: {self.config.PRICE_CHANGE_THRESHOLD}%")
         logger.info(f"时间窗口: {', '.join(map(str, self.config.TIME_WINDOWS))}分钟")
         
+        if self.config.TELEGRAM_ENABLED:
+            logger.info("Telegram通知已启用")
+        else:
+            logger.info("Telegram通知未启用")
+        
         while True:
             try:
                 current_time = datetime.utcnow()
-                logger.debug(f"开始监控循环: {current_time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                logger.debug(f"监控周期开始: {current_time.strftime('%H:%M:%S UTC')}")
                 
                 for symbol in self.config.SYMBOLS:
-                    # 获取当前价格
-                    is_futures = symbol.endswith('_PERP')  # 假设永续合约使用_PERP后缀
-                    price = self.get_price(symbol.replace('_PERP', ''), is_futures)
+                    # 获取当前价格 (自动识别是否永续合约)
+                    is_futures = '_PERP' in symbol
+                    clean_symbol = symbol.replace('_PERP', '')
+                    price = self.get_price(clean_symbol, is_futures)
                     
                     if price is None:
+                        logger.warning(f"无法获取 {symbol} 价格，将重试")
                         continue
                     
                     # 添加到历史记录
@@ -280,9 +260,9 @@ class BinanceMonitor:
                 
             except KeyboardInterrupt:
                 logger.info("用户中断，退出程序")
-                break
+                sys.exit(0)
             except Exception as e:
-                logger.error(f"监控循环出错: {e}", exc_info=True)
+                logger.error(f"监控出错: {e}")
                 time.sleep(30)  # 出错后等待30秒再重试
     
     def check_for_alerts(self, symbol, price_changes):
@@ -310,7 +290,7 @@ def main():
         monitor = BinanceMonitor(config)
         monitor.monitor_prices()
     except Exception as e:
-        logger.exception(f"程序发生错误: {e}")
+        logger.exception(f"程序启动失败: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
