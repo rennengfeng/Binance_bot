@@ -1,4 +1,4 @@
-# binance_bot
+# Binance_bot
 
 ## 使用方法
 1.**克隆仓库：**
