@@ -39,7 +39,7 @@
 4.**运行机器人：**
 
    ```bash
-   python3 binance_monitor.py #或者 python binance_monitor.py
+   python3 binance_bot.py #或者 python binance_bot.py
    ```
 
 ## 功能特点
