@@ -21,7 +21,7 @@
 
 3.**设置：**
 
-编辑 config.py 文件：
+编辑`config.py`文件：
 
  ```bash
    nano config.py
